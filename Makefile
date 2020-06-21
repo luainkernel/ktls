@@ -3,8 +3,12 @@
 # Makefile for the TLS subsystem.
 #
 
-obj-$(CONFIG_TLS) += tls.o
+KERNEL_DIR := /lib/modules/$(shell uname -r)/build
+PWD := $(shell pwd)
 
-tls-y := tls_main.o tls_sw.o
-
-tls-$(CONFIG_TLS_DEVICE) += tls_device.o tls_device_fallback.o
+all:
+	make -C $(KERNEL_DIR) M=${PWD} CONFIG_LUNATIK=m CONFIG_KTLS=m
+	gcc -o test test.c
+clean:
+	make -C $(KERNEL_DIR) M=$(PWD) clean
+	rm test

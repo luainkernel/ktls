@@ -43,6 +43,10 @@
 
 #include <net/tls.h>
 
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
 MODULE_AUTHOR("Mellanox Technologies");
 MODULE_DESCRIPTION("Transport Layer Security Support");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -563,6 +567,45 @@ out:
 	return rc;
 }
 
+#define TLS_LUA 99
+#define lua_error(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
+
+static int do_tls_loadlua(char __user *optval, unsigned int optlen)
+{
+	int rc = 0;
+	char *file;
+	lua_State *L;
+
+	file = kmalloc(optlen, GFP_KERNEL);
+	if (!file) {
+		lua_error("no memory");
+		return -ENOMEM;
+	}
+	rc = copy_from_user(file, optval, optlen);
+	if (rc) {
+		rc = -EFAULT;
+		goto end;
+	}
+
+	L = luaL_newstate();
+	if (L == NULL) {
+		lua_error("no memory");
+		return -ENOMEM;
+	}
+	luaL_openlibs(L);
+
+	if (luaL_dostring(L, file)) {
+		lua_error(lua_tostring(L, -1));
+		rc = -ECANCELED;
+		goto end;
+	}
+
+end:
+	lua_close(L);
+	kfree(file);
+	return rc;
+}
+
 static int do_tls_setsockopt(struct sock *sk, int optname,
 			     char __user *optval, unsigned int optlen)
 {
@@ -575,6 +618,9 @@ static int do_tls_setsockopt(struct sock *sk, int optname,
 		rc = do_tls_setsockopt_conf(sk, optval, optlen,
 					    optname == TLS_TX);
 		release_sock(sk);
+		break;
+	case TLS_LUA:
+		do_tls_loadlua(optval, optlen);
 		break;
 	default:
 		rc = -ENOPROTOOPT;
