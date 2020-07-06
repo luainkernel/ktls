@@ -39,6 +39,7 @@
 /* TLS socket options */
 #define TLS_TX			1	/* Set transmit parameters */
 #define TLS_RX			2	/* Set receive parameters */
+#define TLS_LUA			3	/* Set lua parameters */
 
 /* Supported versions */
 #define TLS_VERSION_MINOR(ver)	((ver) & 0xFF)
@@ -79,6 +80,14 @@
 
 #define TLS_SET_RECORD_TYPE	1
 #define TLS_GET_RECORD_TYPE	2
+
+struct tls_lua_info {
+	char *init;
+	char *recv;
+	/* Will be copy together, do NOT change order. */
+	int init_len;
+	int recv_len;
+};
 
 struct tls_crypto_info {
 	__u16 version;

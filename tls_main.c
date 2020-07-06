@@ -41,7 +41,7 @@
 #include <linux/inetdevice.h>
 #include <linux/inet_diag.h>
 
-#include <net/tls.h>
+#include "tls.h"
 
 #include <lua.h>
 #include <lualib.h>
@@ -260,6 +260,10 @@ void tls_ctx_free(struct sock *sk, struct tls_context *ctx)
 	if (!ctx)
 		return;
 
+	if (ctx->L) {
+		lua_close(ctx->L);
+		ctx->L = NULL;
+	}
 	memzero_explicit(&ctx->crypto_send, sizeof(ctx->crypto_send));
 	memzero_explicit(&ctx->crypto_recv, sizeof(ctx->crypto_recv));
 	mutex_destroy(&ctx->tx_lock);
@@ -268,6 +272,14 @@ void tls_ctx_free(struct sock *sk, struct tls_context *ctx)
 		kfree_rcu(ctx, rcu);
 	else
 		kfree(ctx);
+}
+
+static void tls_sk_lua_cleanup(struct sock *sk, struct tls_context *ctx)
+{
+	kfree(ctx->lua_info.init);
+	kfree(ctx->lua_info.recv);
+	ctx->lua_info.init = NULL;
+	ctx->lua_info.recv = NULL;
 }
 
 static void tls_sk_proto_cleanup(struct sock *sk,
@@ -307,6 +319,7 @@ static void tls_sk_proto_close(struct sock *sk, long timeout)
 
 	if (ctx->tx_conf != TLS_BASE || ctx->rx_conf != TLS_BASE)
 		tls_sk_proto_cleanup(sk, ctx, timeo);
+	tls_sk_lua_cleanup(sk, ctx);
 
 	write_lock_bh(&sk->sk_callback_lock);
 	if (free_ctx)
@@ -567,42 +580,74 @@ out:
 	return rc;
 }
 
-#define TLS_LUA 99
-#define lua_error(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
-
-static int do_tls_loadlua(char __user *optval, unsigned int optlen)
+static int do_tls_loadlua(struct sock *sk, char __user *optval,
+			  unsigned int optlen)
 {
+	struct tls_context *ctx = tls_get_ctx(sk);
+	struct tls_lua_info *lua_info;
+	struct tls_lua_info *opt_info;
+	char* k_init;
+	char* k_recv;
 	int rc = 0;
-	char *file;
-	lua_State *L;
 
-	file = kmalloc(optlen, GFP_KERNEL);
-	if (!file) {
-		lua_error("no memory");
-		return -ENOMEM;
+	if (!optval || (optlen < sizeof(*lua_info))) {
+		rc = -EINVAL;
+		goto out;
 	}
-	rc = copy_from_user(file, optval, optlen);
+
+	lua_info = &ctx->lua_info;
+	opt_info = (struct tls_lua_info *)optval;
+
+	/* allow reconfigure for lua script, free the former space */
+	kfree(lua_info->init);
+	kfree(lua_info->recv);
+	rc = copy_from_user(lua_info, opt_info,sizeof(*lua_info));
 	if (rc) {
 		rc = -EFAULT;
-		goto end;
+		goto out;
 	}
 
-	L = luaL_newstate();
-	if (L == NULL) {
-		lua_error("no memory");
+	/* malloc new space and swap */
+	k_init = kmalloc(lua_info->init_len, GFP_KERNEL);
+	if (!k_init) {
+		TLS_LUA_ERROR("no memory");
 		return -ENOMEM;
 	}
-	luaL_openlibs(L);
+	k_recv = kmalloc(lua_info->recv_len, GFP_KERNEL);
+	if (!k_recv) {
+		TLS_LUA_ERROR("no memory");
+		return -ENOMEM;
+	}
+	rc = copy_from_user(k_init, lua_info->init, lua_info->init_len);
+	if (rc) {
+		rc = -EFAULT;
+		goto out;
+	}
+	rc = copy_from_user(k_recv, lua_info->recv, lua_info->recv_len);
+	if (rc) {
+		rc = -EFAULT;
+		goto out;
+	}
+	lua_info->init = k_init;
+	lua_info->recv = k_recv;
 
-	if (luaL_dostring(L, file)) {
-		lua_error(lua_tostring(L, -1));
-		rc = -ECANCELED;
-		goto end;
+	if (!ctx->L) {
+		ctx->L = luaL_newstate();
+		if (!ctx->L) {
+			TLS_LUA_ERROR("no memory");
+			return -ENOMEM;
+		}
+		luaL_openlibs(ctx->L);
 	}
 
-end:
-	lua_close(L);
-	kfree(file);
+	if (luaL_dostring(ctx->L, lua_info->init)) {
+		TLS_LUA_ERROR(lua_tostring(ctx->L, -1));
+		tls_flush_lua(ctx);
+		rc = -ECANCELED;
+		goto out;
+	}
+
+out:
 	return rc;
 }
 
@@ -620,7 +665,9 @@ static int do_tls_setsockopt(struct sock *sk, int optname,
 		release_sock(sk);
 		break;
 	case TLS_LUA:
-		do_tls_loadlua(optval, optlen);
+		lock_sock(sk);
+		rc = do_tls_loadlua(sk, optval, optlen);
+		release_sock(sk);
 		break;
 	default:
 		rc = -ENOPROTOOPT;

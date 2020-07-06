@@ -40,7 +40,9 @@
 #include <crypto/aead.h>
 
 #include <net/strparser.h>
-#include <net/tls.h>
+#include "tls.h"
+#include <lua.h>
+#include <lauxlib.h>
 
 static int __skb_nsg(struct sk_buff *skb, int offset, int len,
                      unsigned int recursion_level)
@@ -1938,6 +1940,13 @@ recv_end:
 	}
 
 	copied += decrypted;
+
+	if (tls_ctx->L) {
+		if (luaL_dostring(tls_ctx->L, tls_ctx->lua_info.recv)) {
+			TLS_LUA_ERROR(lua_tostring(tls_ctx->L, -1));
+			tls_flush_lua(tls_ctx);
+		}
+	}
 
 end:
 	release_sock(sk);

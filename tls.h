@@ -47,8 +47,12 @@
 #include <net/tcp.h>
 #include <net/strparser.h>
 #include <crypto/aead.h>
-#include <uapi/linux/tls.h>
+#include "uapi/tls.h"
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
 
+#define TLS_LUA_ERROR(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
 
 /* Maximum data size carried in a TLS record */
 #define TLS_MAX_PAYLOAD_SIZE		((size_t)1 << 14)
@@ -290,6 +294,9 @@ struct tls_context {
 	struct list_head list;
 	refcount_t refcount;
 	struct rcu_head rcu;
+
+	lua_State *L;
+	struct tls_lua_info lua_info;
 };
 
 enum tls_offload_ctx_dir {
@@ -649,6 +656,19 @@ static inline bool tls_offload_tx_resync_pending(struct sock *sk)
 	ret = test_bit(TLS_TX_SYNC_SCHED, &tls_ctx->flags);
 	smp_mb__after_atomic();
 	return ret;
+}
+
+static inline int tls_flush_lua(struct tls_context *ctx)
+{
+	lua_close(ctx->L);
+	ctx->L = luaL_newstate();
+	if (!ctx->L) {
+		TLS_LUA_ERROR("flush failed, giving up");
+		return 1;
+	}
+	luaL_openlibs(ctx->L);
+	TLS_LUA_ERROR("lua state flushed");
+	return 0;
 }
 
 int tls_proccess_cmsg(struct sock *sk, struct msghdr *msg,

@@ -36,7 +36,7 @@
 #include <net/dst.h>
 #include <net/inet_connection_sock.h>
 #include <net/tcp.h>
-#include <net/tls.h>
+#include "tls.h"
 
 /* device_offload_lock is used to synchronize tls_dev_add
  * against NETDEV_DOWN notifications.

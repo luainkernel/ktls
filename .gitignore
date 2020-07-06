@@ -9,3 +9,5 @@ test
 *.o
 *.order
 *.mod.c
+.vscode
+.clang-format
