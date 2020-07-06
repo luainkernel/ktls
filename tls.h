@@ -47,8 +47,12 @@
 #include <net/tcp.h>
 #include <net/strparser.h>
 #include <crypto/aead.h>
-#include <uapi/linux/tls.h>
+#include "uapi/tls.h"
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
 
+#define TLS_LUA_ERROR(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
 
 /* Maximum data size carried in a TLS record */
 #define TLS_MAX_PAYLOAD_SIZE		((size_t)1 << 14)
@@ -249,6 +253,8 @@ struct tls_prot_info {
 	u16 tail_size;
 };
 
+#define TLS_LUA_MAXFUNCLENGTH 256
+
 struct tls_context {
 	/* read-only cache line */
 	struct tls_prot_info prot_info;
@@ -290,6 +296,10 @@ struct tls_context {
 	struct list_head list;
 	refcount_t refcount;
 	struct rcu_head rcu;
+
+	lua_State *L;
+	int lua_err;
+	char recv_entry[TLS_LUA_MAXFUNCLENGTH];
 };
 
 enum tls_offload_ctx_dir {

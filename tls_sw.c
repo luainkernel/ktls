@@ -40,7 +40,9 @@
 #include <crypto/aead.h>
 
 #include <net/strparser.h>
-#include <net/tls.h>
+#include "tls.h"
+#include <lua.h>
+#include <lauxlib.h>
 
 static int __skb_nsg(struct sk_buff *skb, int offset, int len,
                      unsigned int recursion_level)
@@ -1739,6 +1741,7 @@ int tls_sw_recvmsg(struct sock *sk,
 	bool is_peek = flags & MSG_PEEK;
 	int num_async = 0;
 	int pending;
+	char *plaintext;
 
 	flags |= nonblock;
 
@@ -1938,6 +1941,29 @@ recv_end:
 	}
 
 	copied += decrypted;
+
+	plaintext = kmalloc(copied, GFP_KERNEL);
+	err = copy_from_user(plaintext, msg->msg_iter.iov->iov_base, copied);
+	if (err) {
+		kfree(plaintext);
+		copied = 0;
+		err = -EAGAIN;
+		tls_ctx->lua_err = TLS_LUA_RECVERR;
+		goto end;
+	}
+	if (tls_ctx->L && tls_ctx->recv_entry[0] != '\0') {
+		lua_getglobal(tls_ctx->L, tls_ctx->recv_entry);
+		lua_pushlstring(tls_ctx->L, plaintext, copied);
+		if (lua_pcall(tls_ctx->L, 1, 0, 0)) {
+			TLS_LUA_ERROR(lua_tostring(tls_ctx->L, -1));
+			copied = 0;
+			err = -EAGAIN;
+			tls_ctx->lua_err = TLS_LUA_RECVERR;
+		} else {
+			tls_ctx->lua_err = TLS_LUA_OK;
+		}
+	}
+	kfree(plaintext);
 
 end:
 	release_sock(sk);

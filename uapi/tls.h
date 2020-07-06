@@ -39,6 +39,12 @@
 /* TLS socket options */
 #define TLS_TX			1	/* Set transmit parameters */
 #define TLS_RX			2	/* Set receive parameters */
+#define TLS_LUA_LOADSCRIPT	3	/* Set lua parameters */
+#define TLS_LUA_RECVENTRY	4	/* Set lua parameters */
+#define TLS_LUA_ERRNO		5	/* Get lua errno */
+
+#define TLS_LUA_OK			0	/* no error */
+#define TLS_LUA_RECVERR		1	/* lua recv func error */
 
 /* Supported versions */
 #define TLS_VERSION_MINOR(ver)	((ver) & 0xFF)
