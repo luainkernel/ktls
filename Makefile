@@ -8,7 +8,5 @@ PWD := $(shell pwd)
 
 all:
 	make -C $(KERNEL_DIR) M=${PWD} CONFIG_LUNATIK=m CONFIG_KTLS=m
-	gcc -o test test.c
 clean:
 	make -C $(KERNEL_DIR) M=$(PWD) clean
-	rm test

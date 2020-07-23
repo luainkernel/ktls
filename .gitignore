@@ -3,9 +3,12 @@
 *.a
 *.symvers
 *.older
-test
 *.ko
 *.mod
 *.o
 *.order
 *.mod.c
+.vscode
+.clang-format
+test/test_client
+test/test_server
