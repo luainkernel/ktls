@@ -10,5 +10,6 @@
 *.mod.c
 .vscode
 .clang-format
-test/test_client
 test/test_server
+benchmark/*
+!benchmark/benchmark.tex
