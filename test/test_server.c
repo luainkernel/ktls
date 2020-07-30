@@ -1,6 +1,11 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <arpa/inet.h>
@@ -8,38 +13,119 @@
 #include <string.h>
 #include <netinet/tcp.h>
 #include <errno.h>
+#include <sys/sendfile.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include "map.h"
 #include "../uapi/tls.h"
 
 #include <gnutls/gnutls.h>
 
-#define KTLS // comment this for not using kTLS
+#define KTLS /* comment this for not using kTLS */
+
+#define HTTP_404                                                               \
+	"HTTP/1.1 404 Not Found\r\n"                                           \
+	"Connection: close"
+#define HTTP_200                                                               \
+	"HTTP/1.1 200 OK\r\n"                                                  \
+	"Content-Length: %d\r\n"                                               \
+	"Content-Type: text/plain\r\n"                                         \
+	"Connection: close\r\n"                                                \
+	"\r\n"
 
 #define PRIORITY                                                               \
-	"NONE:+SECURE256:+SHA256:+ECDHE-ECDSA:+AES-256-GCM:+VERS-TLS1.2:+COMP-NULL:+SIGN-ALL"
+	"NONE:"                                                                \
+	"+SECURE256:+SHA256:"                                                  \
+	"+ECDHE-ECDSA:+AES-256-GCM:"                                           \
+	"+VERS-TLS1.2:+COMP-NULL:+SIGN-ALL"
 #define CHECK(x) assert((x) >= 0)
 
-int port;
-
-int main_server(void);
+int main_server(int port, char *www_path, int cork);
+void cache_replies(map_str_t *cache, char *path);
+char *read_file(char *path);
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2) {
-		printf("usage: ./test port\n");
-		exit(-1);
+	int opt;
+	int port;
+	int cork;
+	char *path;
+
+	cork = 0;
+	while ((opt = getopt(argc, argv, "c")) != -1) {
+		switch (opt) {
+		case 'c':
+			cork = 1;
+			break;
+		default:
+			printf("usage: ./test [-c] port path\n");
+			return 0;
+		}
 	}
-	port = atoi(argv[1]);
+	port = atoi(argv[optind]);
+	path = argv[optind + 1];
 	printf("Serving port %i\n", port);
 
 	CHECK(gnutls_global_init());
 
-	main_server();
+	main_server(port, path, cork);
 
 	gnutls_global_deinit();
 	return 0;
 }
 
-int main_server(void)
+void cache_replies(map_str_t *cache, char *path)
+{
+	DIR *dir;
+	struct dirent *dentry;
+	struct stat st;
+	char *buf_path, *buf_data;
+	if (dir = opendir(path)) {
+		while ((dentry = readdir(dir)) != NULL &&
+		       dentry->d_type == DT_REG) {
+			if (asprintf(&buf_path, "%s/%s", path, dentry->d_name) <
+			    0) {
+				perror("cache asprintf path");
+				exit(-1);
+			}
+			stat(buf_path, &st);
+			if (asprintf(&buf_data, HTTP_200, st.st_size) < 0) {
+				perror("cache asprintf data");
+				exit(-1);
+			}
+			if (asprintf(&buf_path, "/%s", dentry->d_name) < 0) {
+				perror("cache asprintf path");
+				exit(-1);
+			}
+			map_set(cache, buf_path, buf_data);
+		}
+		closedir(dir);
+	}
+}
+
+char *read_file(char *path)
+{
+	FILE *fp;
+	char *ret;
+	long len;
+	fp = fopen(path, "r");
+	if (!fp) {
+		perror("read file");
+		exit(-1);
+	}
+	fseek(fp, 0, SEEK_END);
+	len = ftell(fp);
+	ret = (char *)malloc((len + 1) * sizeof(char));
+	rewind(fp);
+	len = fread(ret, 1, len, fp);
+	ret[len] = '\0';
+	fclose(fp);
+	return ret;
+}
+
+int main_server(int port, char *www_path, int cork)
 {
 	int err;
 	int sock;
@@ -48,28 +134,31 @@ int main_server(void)
 	gnutls_certificate_credentials_t x509_cred;
 	struct sockaddr_in sa;
 	struct sockaddr_in addr;
-	char buf[256];
-	unsigned int len;
-	FILE *fp;
-	char *fdata;
-	long flen;
-	int intlen;
+	char *buf = NULL;
+	int offset;
+	unsigned int addrlen;
+	unsigned int intlen;
+	int one = 1;
+	char *lua_hook = NULL;
+	char method[64], path[256];
+	char *real_path = NULL;
+	struct stat file_stat;
+	int fd;
+	char *www_data = NULL;
+	map_str_t cache;
+	int pagesize;
 
-	len = sizeof(addr);
+	/* cache reply */
+	map_init(&cache);
+	cache_replies(&cache, www_path);
+
+	addrlen = sizeof(addr);
 	intlen = sizeof(int);
+	pagesize = getpagesize();
 
-	fp = fopen("hook.lua", "r");
-	if (!fp) {
-		perror("lua file");
-		exit(-1);
-	}
-	fseek(fp, 0, SEEK_END);
-	flen = ftell(fp);
-	fdata = (char *)malloc((flen + 1) * sizeof(char));
-	rewind(fp);
-	flen = fread(fdata, 1, flen, fp);
-	fdata[flen] = '\0';
-	fclose(fp);
+#ifdef KTLS
+	lua_hook = read_file("hook.lua");
+#endif
 
 	CHECK(gnutls_certificate_allocate_credentials(&x509_cred));
 	CHECK(gnutls_certificate_set_x509_key_file(
@@ -77,13 +166,17 @@ int main_server(void)
 		GNUTLS_X509_FMT_PEM));
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0) {
+		perror("setsockopt[reuseaddr]");
+		exit(-1);
+	}
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;
 	sa.sin_addr.s_addr = INADDR_ANY;
 	sa.sin_port = htons(port);
 	err = bind(sock, (struct sockaddr *)&sa, sizeof(sa));
 	if (err || !sock) {
-		perror("server socket");
+		perror("server bind");
 		exit(-1);
 	}
 	err = listen(sock, 10);
@@ -93,6 +186,7 @@ int main_server(void)
 	}
 
 	while (1) {
+		offset = 0;
 		gnutls_init(&session, GNUTLS_SERVER);
 		gnutls_priority_set_direct(session, PRIORITY, NULL);
 		CHECK(gnutls_credentials_set(session, GNUTLS_CRD_CERTIFICATE,
@@ -102,7 +196,7 @@ int main_server(void)
 		gnutls_handshake_set_timeout(session,
 					     GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
 
-		client = accept(sock, (struct sockaddr *)&addr, &len);
+		client = accept(sock, (struct sockaddr *)&addr, &addrlen);
 		gnutls_transport_set_int(session, client);
 
 #ifdef KTLS
@@ -112,6 +206,12 @@ int main_server(void)
 			exit(-1);
 		}
 #endif
+		if (cork)
+			if (setsockopt(client, SOL_TCP, TCP_CORK, &one,
+				       sizeof(one))) {
+				perror("setsockopt[cork]");
+				exit(-1);
+			}
 
 		do {
 			err = gnutls_handshake(session);
@@ -150,8 +250,29 @@ int main_server(void)
 			exit(-1);
 		}
 
-		if (setsockopt(client, SOL_TLS, TLS_LUA_LOADSCRIPT, fdata,
-			       strlen(fdata) + 1) == -1) {
+		err = gnutls_record_get_state(session, 0, &mac_key, &iv,
+					      &cipher_key, seq_number);
+		if (err) {
+			gnutls_perror(err);
+			exit(-1);
+		}
+
+		memcpy(crypto_info.iv, iv.data + 4,
+		       TLS_CIPHER_AES_GCM_256_IV_SIZE);
+		memcpy(crypto_info.rec_seq, seq_number,
+		       TLS_CIPHER_AES_GCM_256_REC_SEQ_SIZE);
+		memcpy(crypto_info.key, cipher_key.data,
+		       TLS_CIPHER_AES_GCM_256_KEY_SIZE);
+		memcpy(crypto_info.salt, iv.data,
+		       TLS_CIPHER_AES_GCM_256_SALT_SIZE);
+		if (setsockopt(client, SOL_TLS, TLS_TX, &crypto_info,
+			       sizeof(crypto_info))) {
+			perror("setsockopt[tls]");
+			exit(-1);
+		}
+
+		if (setsockopt(client, SOL_TLS, TLS_LUA_LOADSCRIPT, lua_hook,
+			       strlen(lua_hook) + 1) == -1) {
 			perror("setsockopt[lua]");
 			exit(-1);
 		}
@@ -162,28 +283,158 @@ int main_server(void)
 		}
 #endif
 
+		buf = (char *)malloc(pagesize);
 #ifdef KTLS
-		err = recv(client, buf, sizeof(buf), 0);
-		if (err == -1 && errno == EAGAIN) {
-			int err;
-			getsockopt(client, SOL_TLS, TLS_LUA_ERRNO, &err,
-				   &intlen);
-			if (err == TLS_LUA_RECVERR) {
-				printf("recv lua err\n");
+		while ((err = recv(client, buf + offset,
+				   pagesize - (offset % pagesize), 0)) != 0) {
+			if (err == -1 && errno == EAGAIN) {
+				int err;
+				getsockopt(client, SOL_TLS, TLS_LUA_ERRNO, &err,
+					   &intlen);
+				if (err == TLS_LUA_RECVERR) {
+					printf("recv lua err\n");
+				}
+			} else if (err == -1) {
+				perror("recv");
+				goto end;
+			} else {
+				offset += err;
+				if (buf[offset - 4] == '\r' &&
+				    buf[offset - 3] == '\n' &&
+				    buf[offset - 2] == '\r' &&
+				    buf[offset - 1] == '\n')
+					break;
+				if (offset % pagesize == 0)
+					buf = (char *)realloc(
+						buf, offset + pagesize);
 			}
 		}
-#else
-		gnutls_record_recv(session, buf, sizeof(buf));
-#endif
-		gnutls_record_send(session, buf, strlen(buf) + 1);
+		sscanf(buf, "%s %s", method, path);
+		if (asprintf(&real_path, "%s%s", www_path, path) < 0) {
+			perror("real path asprintf");
+			goto end;
+		}
+		fd = open(real_path, O_RDONLY);
+		if (fd == -1) {
+			send(client, HTTP_404, strlen(HTTP_404), 0);
+		} else {
+			if (fstat(fd, &file_stat)) {
+				perror("fstat");
+				close(fd);
+				goto end;
+			}
+			char **header = map_get(&cache, path);
+			if (header) {
+				if (send(client, *header, strlen(*header), 0) ==
+				    -1) {
+					perror("send");
+					close(fd);
+					goto end;
+				}
+			} else {
+				if (asprintf(&buf, HTTP_200,
+					     file_stat.st_size) < 0) {
+					perror("buf asprintf");
+					close(fd);
+					goto end;
+				}
+				if (send(client, buf, strlen(buf), 0) == -1) {
+					perror("send");
+					close(fd);
+					goto end;
+				}
+				map_set(&cache, path, buf);
+			}
 
-		gnutls_bye(session, GNUTLS_SHUT_WR);
+			if (sendfile(client, fd, NULL, file_stat.st_size) ==
+			    -1) {
+				perror("sendfile");
+				close(fd);
+				goto end;
+			}
+			close(fd);
+		}
+#else
+		while ((err = gnutls_record_recv(
+				session, buf + offset,
+				pagesize - (offset % pagesize))) != 0) {
+			if (err == -1) {
+				perror("gnutls_record_recv");
+				goto end;
+			} else {
+				offset += err;
+				if (buf[offset - 4] == '\r' &&
+				    buf[offset - 3] == '\n' &&
+				    buf[offset - 2] == '\r' &&
+				    buf[offset - 1] == '\n')
+					break;
+				if (offset % pagesize == 0)
+					buf = (char *)realloc(
+						buf, offset + pagesize);
+			}
+		}
+		sscanf(buf, "%s %s", method, path);
+		if (asprintf(&real_path, "%s%s", www_path, path) < 0) {
+			perror("real path asprintf");
+			goto end;
+		}
+		fd = open(real_path, O_RDONLY);
+		if (fd == -1) {
+			gnutls_record_send(session, HTTP_404, strlen(HTTP_404));
+		} else {
+			if (fstat(fd, &file_stat)) {
+				perror("fstat");
+				close(fd);
+				goto end;
+			}
+			char **header = map_get(&cache, path);
+			if (header) {
+				if (gnutls_record_send(session, *header,
+						       strlen(*header)) == -1) {
+					perror("send");
+					close(fd);
+					goto end;
+				}
+			} else {
+				if (asprintf(&buf, HTTP_200,
+					     file_stat.st_size) < 0) {
+					perror("buf asprintf");
+					close(fd);
+					goto end;
+				}
+				if (gnutls_record_send(session, buf,
+						       strlen(buf)) == -1) {
+					perror("send");
+					close(fd);
+					goto end;
+				}
+				map_set(&cache, path, buf);
+			}
+
+			www_data = (char *)malloc(file_stat.st_size);
+			read(fd, www_data, file_stat.st_size);
+			if (gnutls_record_send(session, www_data,
+					       file_stat.st_size) == -1) {
+				perror("sendfile");
+				free(www_data);
+				close(fd);
+				goto end;
+			}
+			free(www_data);
+			close(fd);
+		}
+#endif
+
+	end:
 		close(client);
 		gnutls_deinit(session);
+		free(buf);
+		free(real_path);
 	}
 	gnutls_certificate_free_credentials(x509_cred);
 	shutdown(sock, SHUT_RDWR);
 	close(sock);
-	free(fdata);
+	free(lua_hook);
+	map_deinit(&cache);
 	return 0;
 }

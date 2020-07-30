@@ -1,5 +1,4 @@
 all:
-	gcc -o test_server test_server.c -lgnutls
-	gcc -o test_client test_client.c -lgnutls
+	gcc -o test_server test_server.c map.c -lgnutls
 clean:
-	rm test_server test_client
+	rm test_server
