@@ -41,8 +41,8 @@
 
 #include <net/strparser.h>
 #include "tls.h"
-#include <lua.h>
-#include <lauxlib.h>
+#include "lunatik/lua/lua.h"
+#include "lunatik/lua/lauxlib.h"
 
 static int __skb_nsg(struct sk_buff *skb, int offset, int len,
                      unsigned int recursion_level)
@@ -1742,6 +1742,7 @@ int tls_sw_recvmsg(struct sock *sk,
 	int num_async = 0;
 	int pending;
 	char *plaintext;
+	const char *luafile;
 
 	flags |= nonblock;
 
@@ -1953,14 +1954,34 @@ recv_end:
 	}
 	if (tls_ctx->L && tls_ctx->recv_entry[0] != '\0') {
 		lua_getglobal(tls_ctx->L, tls_ctx->recv_entry);
+		lua_pushstring(tls_ctx->L, tls_ctx->recv_wwwroot);
 		lua_pushlstring(tls_ctx->L, plaintext, copied);
-		if (lua_pcall(tls_ctx->L, 1, 0, 0)) {
+		if (lua_pcall(tls_ctx->L, 2, 2, 0)) {
 			TLS_LUA_ERROR(lua_tostring(tls_ctx->L, -1));
 			copied = 0;
 			err = -EAGAIN;
 			tls_ctx->lua_err = TLS_LUA_RECVERR;
 		} else {
-			tls_ctx->lua_err = TLS_LUA_OK;
+			if (!lua_isinteger(tls_ctx->L, -2) ||
+			    !lua_isstring(tls_ctx->L, -1)) {
+				TLS_LUA_ERROR(
+					"recv hook should return 1 int and 1 string");
+				copied = 0;
+				err = -EAGAIN;
+				tls_ctx->lua_err = TLS_LUA_RECVERR;
+			} else {
+				tls_ctx->lua_wwwcode =
+					lua_tointeger(tls_ctx->L, -2);
+				luafile = lua_tostring(tls_ctx->L, -1);
+				memcpy(tls_ctx->lua_wwwfile, luafile,
+				       strlen(luafile) + 1);
+				lua_pop(tls_ctx->L, 2);
+				if (tls_ctx->lua_wwwcode != 0) {
+					copied = 0;
+					err = -EAGAIN;
+				}
+				tls_ctx->lua_err = TLS_LUA_OK;
+			}
 		}
 	}
 	kfree(plaintext);

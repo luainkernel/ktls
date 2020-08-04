@@ -43,9 +43,9 @@
 
 #include "tls.h"
 
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
+#include "lunatik/lua/lua.h"
+#include "lunatik/lua/lualib.h"
+#include "lunatik/lua/lauxlib.h"
 
 MODULE_AUTHOR("Mellanox Technologies");
 MODULE_DESCRIPTION("Transport Layer Security Support");
@@ -424,15 +424,31 @@ out:
 	return rc;
 }
 
-static int do_tls_getsockopt_lua(struct sock *sk, char __user *optval,
-				 int __user *optlen)
+static int do_tls_getsockopt_lua(struct sock *sk, int optname,
+				 char __user *optval, int __user *optlen)
 {
 	struct tls_context *ctx = tls_get_ctx(sk);
+	int len, val_len;
+	copy_from_user(&val_len, optlen, sizeof(int));
 
-	if (*optlen != sizeof(int))
-		return -EINVAL;
+	switch (optname) {
+	case TLS_LUA_ERRNO:
+		if (val_len != sizeof(int))
+			return -EINVAL;
+		copy_to_user(optval, &ctx->lua_err, sizeof(int));
+		break;
+	case TLS_LUA_CODE:
+		if (val_len != sizeof(int))
+			return -EINVAL;
+		copy_to_user(optval, &ctx->lua_wwwcode, sizeof(int));
+		break;
+	case TLS_LUA_FILE:
+		len = strlen(ctx->lua_wwwfile) + 1;
+		copy_to_user(optval, ctx->lua_wwwfile,
+			     val_len < len ? val_len : len);
+		break;
+	}
 
-	copy_to_user(optval, &ctx->lua_err, sizeof(int));
 	return 0;
 }
 
@@ -446,7 +462,9 @@ static int do_tls_getsockopt(struct sock *sk, int optname,
 		rc = do_tls_getsockopt_tx(sk, optval, optlen);
 		break;
 	case TLS_LUA_ERRNO:
-		rc = do_tls_getsockopt_lua(sk, optval, optlen);
+	case TLS_LUA_CODE:
+	case TLS_LUA_FILE:
+		rc = do_tls_getsockopt_lua(sk, optname, optval, optlen);
 		break;
 	default:
 		rc = -ENOPROTOOPT;
@@ -639,6 +657,19 @@ static int do_tls_lua_setrecv(struct sock *sk, char __user *optval,
 	return rc;
 }
 
+static int do_tls_lua_setwwwroot(struct sock *sk, char __user *optval,
+				 unsigned int optlen)
+{
+	struct tls_context *ctx = tls_get_ctx(sk);
+	int rc = 0;
+
+	rc = copy_from_user(ctx->recv_wwwroot, optval, optlen);
+	if (rc)
+		return -EFAULT;
+
+	return rc;
+}
+
 static int do_tls_setsockopt(struct sock *sk, int optname, char __user *optval,
 			     unsigned int optlen)
 {
@@ -660,6 +691,11 @@ static int do_tls_setsockopt(struct sock *sk, int optname, char __user *optval,
 	case TLS_LUA_RECVENTRY:
 		lock_sock(sk);
 		rc = do_tls_lua_setrecv(sk, optval, optlen);
+		release_sock(sk);
+		break;
+	case TLS_LUA_WWWROOT:
+		lock_sock(sk);
+		rc = do_tls_lua_setwwwroot(sk, optval, optlen);
 		release_sock(sk);
 		break;
 	default:
