@@ -95,10 +95,6 @@ void cache_replies(map_str_t *cache, char *path)
 				perror("cache asprintf data");
 				exit(-1);
 			}
-			if (asprintf(&buf_path, "/%s", dentry->d_name) < 0) {
-				perror("cache asprintf path");
-				exit(-1);
-			}
 			map_set(cache, buf_path, buf_data);
 		}
 		closedir(dir);
@@ -125,6 +121,69 @@ char *read_file(char *path)
 	return ret;
 }
 
+int handle_request(int client, map_str_t *cache)
+{
+	int code;
+	char file[4096];
+	int maxsize;
+	int intlen;
+	char *http_header;
+	int fd;
+	struct stat file_stat;
+	maxsize = sizeof(file);
+	intlen = sizeof(int);
+
+	getsockopt(client, SOL_TLS, TLS_LUA_CODE, &code, &intlen);
+	getsockopt(client, SOL_TLS, TLS_LUA_FILE, &file, &maxsize);
+	if (code == 404) {
+		send(client, HTTP_404, strlen(HTTP_404), 0);
+	} else {
+		fd = open(file, O_RDONLY);
+		if (fd == -1) {
+			send(client, HTTP_404, strlen(HTTP_404), 0);
+		} else {
+			if (fstat(fd, &file_stat)) {
+				perror("fstat");
+				close(fd);
+				return -1;
+			}
+			char **header = map_get(cache, file);
+			if (header) {
+				if (send(client, *header, strlen(*header), 0) ==
+				    -1) {
+					perror("send");
+					close(fd);
+					return -1;
+				}
+			} else {
+				if (asprintf(&http_header, HTTP_200,
+					     file_stat.st_size) < 0) {
+					perror("http_header asprintf");
+					close(fd);
+					return -1;
+				}
+				if (send(client, http_header,
+					 strlen(http_header), 0) == -1) {
+					perror("send");
+					close(fd);
+					return -1;
+				}
+				map_set(cache, file, http_header);
+				// http_header shouldn't free
+			}
+
+			if (sendfile(client, fd, NULL, file_stat.st_size) ==
+			    -1) {
+				perror("sendfile");
+				close(fd);
+				return -1;
+			}
+			close(fd);
+		}
+	}
+	return 0;
+}
+
 int main_server(int port, char *www_path, int cork)
 {
 	int err;
@@ -147,6 +206,7 @@ int main_server(int port, char *www_path, int cork)
 	char *www_data = NULL;
 	map_str_t cache;
 	int pagesize;
+	char *http_header;
 
 	/* cache reply */
 	map_init(&cache);
@@ -281,6 +341,11 @@ int main_server(int port, char *www_path, int cork)
 			perror("setsockopt[lua]");
 			exit(-1);
 		}
+		if (setsockopt(client, SOL_TLS, TLS_LUA_WWWROOT, www_path,
+			       strlen(www_path) + 1) == -1) {
+			perror("setsockopt[lua]");
+			exit(-1);
+		}
 #endif
 
 		buf = (char *)malloc(pagesize);
@@ -288,71 +353,25 @@ int main_server(int port, char *www_path, int cork)
 		while ((err = recv(client, buf + offset,
 				   pagesize - (offset % pagesize), 0)) != 0) {
 			if (err == -1 && errno == EAGAIN) {
-				int err;
 				getsockopt(client, SOL_TLS, TLS_LUA_ERRNO, &err,
 					   &intlen);
 				if (err == TLS_LUA_RECVERR) {
 					printf("recv lua err\n");
+					goto end;
+				} else {
+					if (handle_request(client, &cache) != 0)
+						goto end;
+					break;
 				}
 			} else if (err == -1) {
 				perror("recv");
 				goto end;
 			} else {
 				offset += err;
-				if (buf[offset - 4] == '\r' &&
-				    buf[offset - 3] == '\n' &&
-				    buf[offset - 2] == '\r' &&
-				    buf[offset - 1] == '\n')
-					break;
 				if (offset % pagesize == 0)
 					buf = (char *)realloc(
 						buf, offset + pagesize);
 			}
-		}
-		sscanf(buf, "%s %s", method, path);
-		if (asprintf(&real_path, "%s%s", www_path, path) < 0) {
-			perror("real path asprintf");
-			goto end;
-		}
-		fd = open(real_path, O_RDONLY);
-		if (fd == -1) {
-			send(client, HTTP_404, strlen(HTTP_404), 0);
-		} else {
-			if (fstat(fd, &file_stat)) {
-				perror("fstat");
-				close(fd);
-				goto end;
-			}
-			char **header = map_get(&cache, path);
-			if (header) {
-				if (send(client, *header, strlen(*header), 0) ==
-				    -1) {
-					perror("send");
-					close(fd);
-					goto end;
-				}
-			} else {
-				if (asprintf(&buf, HTTP_200,
-					     file_stat.st_size) < 0) {
-					perror("buf asprintf");
-					close(fd);
-					goto end;
-				}
-				if (send(client, buf, strlen(buf), 0) == -1) {
-					perror("send");
-					close(fd);
-					goto end;
-				}
-				map_set(&cache, path, buf);
-			}
-
-			if (sendfile(client, fd, NULL, file_stat.st_size) ==
-			    -1) {
-				perror("sendfile");
-				close(fd);
-				goto end;
-			}
-			close(fd);
 		}
 #else
 		while ((err = gnutls_record_recv(
@@ -396,19 +415,20 @@ int main_server(int port, char *www_path, int cork)
 					goto end;
 				}
 			} else {
-				if (asprintf(&buf, HTTP_200,
+				if (asprintf(&http_header, HTTP_200,
 					     file_stat.st_size) < 0) {
 					perror("buf asprintf");
 					close(fd);
 					goto end;
 				}
-				if (gnutls_record_send(session, buf,
-						       strlen(buf)) == -1) {
+				if (gnutls_record_send(session, http_header,
+						       strlen(http_header)) ==
+				    -1) {
 					perror("send");
 					close(fd);
 					goto end;
 				}
-				map_set(&cache, path, buf);
+				map_set(&cache, path, http_header);
 			}
 
 			www_data = (char *)malloc(file_stat.st_size);

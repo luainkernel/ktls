@@ -48,9 +48,9 @@
 #include <net/strparser.h>
 #include <crypto/aead.h>
 #include "uapi/tls.h"
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
+#include "lunatik/lua/lua.h"
+#include "lunatik/lua/lualib.h"
+#include "lunatik/lua/lauxlib.h"
 
 #define TLS_LUA_ERROR(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
 
@@ -254,6 +254,7 @@ struct tls_prot_info {
 };
 
 #define TLS_LUA_MAXFUNCLENGTH 256
+#define TLS_LUA_MAXPATH 4096
 
 struct tls_context {
 	/* read-only cache line */
@@ -299,7 +300,10 @@ struct tls_context {
 
 	lua_State *L;
 	int lua_err;
+	int lua_wwwcode;
+	char lua_wwwfile[TLS_LUA_MAXPATH];
 	char recv_entry[TLS_LUA_MAXFUNCLENGTH];
+	char recv_wwwroot[TLS_LUA_MAXPATH];
 };
 
 enum tls_offload_ctx_dir {

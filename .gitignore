@@ -13,3 +13,4 @@
 test/test_server
 benchmark/*
 !benchmark/benchmark.tex
+!benchmark/pic

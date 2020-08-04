@@ -3,6 +3,7 @@
 \usepackage{geometry}
 \usepackage{times}
 \usepackage{float}
+\usepackage{graphicx}
 \geometry{scale=0.9}
 \pagestyle{empty}
 
@@ -72,4 +73,54 @@ TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
         20                          & 287                                       & 249                                   & 245 & 252 & 252 & 15.22 & 257 & 348.63 & 401.81 & 408.23 & 397.07 & 397.20 & 21.37 & 390.59 \\ \hline
     \end{tabular}
 \end{table}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.6]{pic/p1.png}
+    \caption{Concurrency comparison}
+\end{figure}
+
+\section*{Toy server without kTLS}
+TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
+\subsection*{1K file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                      \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
+        1                           & 10.5                                      & 10.4                                  & 10.6 & 10.7 & 10.6 & 0.11 & 10.55 & 0.10 & 0.10 & 0.10 & 0.10 & 0.10 & 0.00 & 0.10 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{1M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                            \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1     & 2     & 3     & 4     & 5     & std  & avg   \\ \hline
+        1                           & 14.1                                      & 13.9                                  & 15.4 & 14.9 & 14.7 & 0.55 & 14.60 & 71.14 & 71.86 & 64.83 & 67.18 & 68.00 & 2.59 & 68.60 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{10M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                   \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 32.8                                      & 33.1                                  & 31.9 & 35.4 & 32.5 & 1.18 & 33.14 & 304.63 & 301.96 & 313.46 & 282.78 & 307.96 & 10.42 & 302.16 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{100M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                 \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3   & 4   & 5   & std  & avg    & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 194                                       & 185                                   & 190 & 185 & 184 & 3.83 & 187.60 & 516.66 & 540.92 & 527.04 & 541.78 & 544.75 & 10.70 & 534.23 \\ \hline
+    \end{tabular}
+\end{table}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.6]{pic/p2.png}
+    \caption{Efficiency comparison}
+
+\end{figure}
 \end{document}
