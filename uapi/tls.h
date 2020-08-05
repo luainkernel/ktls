@@ -46,8 +46,8 @@
 #define TLS_LUA_CODE		11	/* Get lua http code */
 #define TLS_LUA_FILE		12	/* Get lua file */
 
-#define TLS_LUA_OK 0 /* no error */
-#define TLS_LUA_RECVERR 1 /* lua recv func error */
+#define TLS_LUA_OK			0	/* no error */
+#define TLS_LUA_RECVERR		1	/* lua recv func error */
 
 /* Supported versions */
 #define TLS_VERSION_MINOR(ver)	((ver) & 0xFF)

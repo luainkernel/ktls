@@ -85,9 +85,9 @@ TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
 \begin{table}[H]
     \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
         \hline
-        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                      \\ \cline{2-15}
-                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
-        1                           & 10.5                                      & 10.4                                  & 10.6 & 10.7 & 10.6 & 0.11 & 10.55 & 0.10 & 0.10 & 0.10 & 0.10 & 0.10 & 0.00 & 0.10 \\ \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                     \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg  & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
+        1                           & 9.24                                      & 9.44                                  & 9.10 & 8.86 & 9.14 & 0.19 & 9.16 & 0.11 & 0.11 & 0.12 & 0.12 & 0.12 & 0.00 & 0.12 \\ \hline
     \end{tabular}
 \end{table}
 \subsection*{1M file}
@@ -96,7 +96,7 @@ TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
         \hline
         \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                            \\ \cline{2-15}
                                     & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1     & 2     & 3     & 4     & 5     & std  & avg   \\ \hline
-        1                           & 14.1                                      & 13.9                                  & 15.4 & 14.9 & 14.7 & 0.55 & 14.60 & 71.14 & 71.86 & 64.83 & 67.18 & 68.00 & 2.59 & 68.60 \\ \hline
+        1                           & 12.4                                      & 12.6                                  & 13.9 & 13.2 & 12.9 & 0.54 & 13.00 & 80.75 & 79.27 & 71.72 & 75.82 & 77.76 & 3.13 & 77.07 \\ \hline
     \end{tabular}
 \end{table}
 \subsection*{10M file}
@@ -105,7 +105,7 @@ TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
         \hline
         \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                   \\ \cline{2-15}
                                     & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
-        1                           & 32.8                                      & 33.1                                  & 31.9 & 35.4 & 32.5 & 1.18 & 33.14 & 304.63 & 301.96 & 313.46 & 282.78 & 307.96 & 10.42 & 302.16 \\ \hline
+        1                           & 30.5                                      & 30.1                                  & 31.6 & 35.9 & 30.6 & 2.14 & 31.75 & 327.73 & 332.55 & 316.10 & 278.43 & 326.42 & 19.65 & 316.25 \\ \hline
     \end{tabular}
 \end{table}
 \subsection*{100M file}
@@ -114,13 +114,134 @@ TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
         \hline
         \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                 \\ \cline{2-15}
                                     & 1                                         & 2                                     & 3   & 4   & 5   & std  & avg    & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
-        1                           & 194                                       & 185                                   & 190 & 185 & 184 & 3.83 & 187.60 & 516.66 & 540.92 & 527.04 & 541.78 & 544.75 & 10.70 & 534.23 \\ \hline
+        1                           & 218                                       & 222                                   & 229 & 204 & 220 & 8.11 & 218.63 & 459.44 & 450.04 & 436.35 & 489.27 & 455.10 & 17.44 & 458.04 \\ \hline
     \end{tabular}
 \end{table}
 \begin{figure}[H]
     \centering
     \includegraphics[scale=0.6]{pic/p2.png}
     \caption{Efficiency comparison}
+\end{figure}
 
+\section*{Toy server without kTLS - user lua}
+TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
+\subsection*{1K file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                     \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg  & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
+        1                           & 9.22                                      & 8.66                                  & 9.15 & 8.96 & 8.90 & 0.20 & 8.98 & 0.11 & 0.12 & 0.12 & 0.12 & 0.12 & 0.00 & 0.12 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{1M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                            \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1     & 2     & 3     & 4     & 5     & std  & avg   \\ \hline
+        1                           & 12.9                                      & 13.1                                  & 13.9 & 12.9 & 12.6 & 0.45 & 13.06 & 77.71 & 76.52 & 71.86 & 77.74 & 79.36 & 2.55 & 76.64 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{10M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                   \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 35.9                                      & 30.8                                  & 28.8 & 30.0 & 31.2 & 2.42 & 31.37 & 278.35 & 324.53 & 346.86 & 333.01 & 320.15 & 23.00 & 320.58 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{100M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                  \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3   & 4   & 5   & std   & avg    & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 222                                       & 206                                   & 218 & 194 & 204 & 10.04 & 208.87 & 450.85 & 485.22 & 458.13 & 515.11 & 490.10 & 23.20 & 479.88 \\ \hline
+    \end{tabular}
+\end{table}
+
+\section*{Toy server with kTLS - user lua}
+TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
+\subsection*{1K file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                     \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg  & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
+        1                           & 9.03                                      & 8.42                                  & 8.50 & 8.90 & 8.37 & 0.27 & 8.64 & 0.12 & 0.13 & 0.12 & 0.12 & 0.13 & 0.00 & 0.12 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{1M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                            \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1     & 2     & 3     & 4     & 5     & std  & avg   \\ \hline
+        1                           & 14.7                                      & 14.7                                  & 14.1 & 14.9 & 14.3 & 0.29 & 14.54 & 68.08 & 68.05 & 70.98 & 67.14 & 69.87 & 1.39 & 68.82 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{10M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                   \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 30.7                                      & 31.8                                  & 28.8 & 30.6 & 31.5 & 1.04 & 30.70 & 326.19 & 314.17 & 346.70 & 326.44 & 317.07 & 11.39 & 326.11 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{100M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                 \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3   & 4   & 5   & std  & avg    & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 171                                       & 178                                   & 179 & 169 & 175 & 3.99 & 174.24 & 585.69 & 561.44 & 558.98 & 592.72 & 572.31 & 13.21 & 574.23 \\ \hline
+    \end{tabular}
+\end{table}
+
+\section*{Toy server with kTLS - kernel lua}
+TLSv1.2, ECDHE-RSA-AES256-GCM-SHA384
+\subsection*{1K file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                      \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5     & std  & avg  & 1    & 2    & 3    & 4    & 5    & std  & avg  \\ \hline
+        1                           & 10.02                                     & 9.42                                  & 9.50 & 8.91 & 10.46 & 0.53 & 9.66 & 0.11 & 0.11 & 0.11 & 0.12 & 0.10 & 0.01 & 0.11 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{1M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                            \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1     & 2     & 3     & 4     & 5     & std  & avg   \\ \hline
+        1                           & 13.8                                      & 15.5                                  & 13.3 & 13.6 & 13.0 & 0.89 & 13.83 & 72.72 & 64.35 & 75.13 & 73.73 & 76.99 & 4.36 & 72.58 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{10M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                   \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3    & 4    & 5    & std  & avg   & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 34.4                                      & 35.4                                  & 30.9 & 31.8 & 30.1 & 2.01 & 32.50 & 291.12 & 282.80 & 323.30 & 314.94 & 331.91 & 18.82 & 308.82 \\ \hline
+    \end{tabular}
+\end{table}
+\subsection*{100M file}
+\begin{table}[H]
+    \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{concurrent} & \multicolumn{7}{c|}{Time per request(ms)} & \multicolumn{7}{c|}{Rate(MBytes/sec)}                                                                                                 \\ \cline{2-15}
+                                    & 1                                         & 2                                     & 3   & 4   & 5   & std  & avg    & 1      & 2      & 3      & 4      & 5      & std   & avg    \\ \hline
+        1                           & 180                                       & 196                                   & 189 & 173 & 186 & 7.83 & 184.89 & 556.22 & 510.84 & 528.13 & 577.82 & 536.24 & 23.16 & 541.85 \\ \hline
+    \end{tabular}
+\end{table}
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=0.85]{pic/p3.png}
+    \caption{kTLS/user lua/kernel lua comparison}
 \end{figure}
 \end{document}

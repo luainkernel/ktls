@@ -46,7 +46,6 @@
 #include "lunatik/lua/lua.h"
 #include "lunatik/lua/lualib.h"
 #include "lunatik/lua/lauxlib.h"
-#include "lunatik/lua/l"
 
 MODULE_AUTHOR("Mellanox Technologies");
 MODULE_DESCRIPTION("Transport Layer Security Support");
