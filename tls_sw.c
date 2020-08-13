@@ -1954,9 +1954,8 @@ recv_end:
 	}
 	if (tls_ctx->L && tls_ctx->recv_entry[0] != '\0') {
 		lua_getglobal(tls_ctx->L, tls_ctx->recv_entry);
-		lua_pushstring(tls_ctx->L, tls_ctx->recv_wwwroot);
 		lua_pushlstring(tls_ctx->L, plaintext, copied);
-		if (lua_pcall(tls_ctx->L, 2, 2, 0)) {
+		if (lua_pcall(tls_ctx->L, 1, 2, 0)) {
 			TLS_LUA_ERROR(lua_tostring(tls_ctx->L, -1));
 			copied = 0;
 			err = -EAGAIN;

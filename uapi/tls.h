@@ -41,7 +41,6 @@
 #define TLS_RX				2	/* Set receive parameters */
 #define TLS_LUA_LOADSCRIPT	3	/* Set lua parameters */
 #define TLS_LUA_RECVENTRY	4	/* Set lua parameters */
-#define TLS_LUA_WWWROOT		5	/* Set lua wwwroot */
 #define TLS_LUA_ERRNO		10	/* Get lua errno */
 #define TLS_LUA_CODE		11	/* Get lua http code */
 #define TLS_LUA_FILE		12	/* Get lua file */

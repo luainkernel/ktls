@@ -119,7 +119,7 @@ void set_luafile(int client, char *path, lua_State *L)
 	if (dir = opendir(path)) {
 		while ((dentry = readdir(dir)) != NULL &&
 		       dentry->d_type == DT_REG) {
-			if (asprintf(&script, "files['/%s'] = true",
+			if (asprintf(&script, "files['%s'] = true",
 				     dentry->d_name) < 0) {
 				perror("script asprintf");
 				exit(-1);
@@ -430,11 +430,6 @@ int main_server(int port, char *www_path, int cork)
 		}
 		if (setsockopt(client, SOL_TLS, TLS_LUA_RECVENTRY, "recv",
 			       strlen("recv") + 1) == -1) {
-			perror("setsockopt[lua]");
-			exit(-1);
-		}
-		if (setsockopt(client, SOL_TLS, TLS_LUA_WWWROOT, www_path,
-			       strlen(www_path) + 1) == -1) {
 			perror("setsockopt[lua]");
 			exit(-1);
 		}

@@ -303,7 +303,6 @@ struct tls_context {
 	int lua_wwwcode;
 	char lua_wwwfile[TLS_LUA_MAXPATH];
 	char recv_entry[TLS_LUA_MAXFUNCLENGTH];
-	char recv_wwwroot[TLS_LUA_MAXPATH];
 };
 
 enum tls_offload_ctx_dir {

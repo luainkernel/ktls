@@ -657,19 +657,6 @@ static int do_tls_lua_setrecv(struct sock *sk, char __user *optval,
 	return rc;
 }
 
-static int do_tls_lua_setwwwroot(struct sock *sk, char __user *optval,
-				 unsigned int optlen)
-{
-	struct tls_context *ctx = tls_get_ctx(sk);
-	int rc = 0;
-
-	rc = copy_from_user(ctx->recv_wwwroot, optval, optlen);
-	if (rc)
-		return -EFAULT;
-
-	return rc;
-}
-
 static int do_tls_setsockopt(struct sock *sk, int optname, char __user *optval,
 			     unsigned int optlen)
 {
@@ -691,11 +678,6 @@ static int do_tls_setsockopt(struct sock *sk, int optname, char __user *optval,
 	case TLS_LUA_RECVENTRY:
 		lock_sock(sk);
 		rc = do_tls_lua_setrecv(sk, optval, optlen);
-		release_sock(sk);
-		break;
-	case TLS_LUA_WWWROOT:
-		lock_sock(sk);
-		rc = do_tls_lua_setwwwroot(sk, optval, optlen);
 		release_sock(sk);
 		break;
 	default:
