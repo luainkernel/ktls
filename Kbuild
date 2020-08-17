@@ -12,4 +12,4 @@ subdir-ccflags-y := -I${PWD}/${LUNATIK} \
 
 obj-y += lunatik/
 obj-$(CONFIG_KTLS) += tls.o
-tls-$(CONFIG_KTLS) := tls_main.o tls_sw.o tls_device.o tls_device_fallback.o
+tls-$(CONFIG_KTLS) := tls_main.o tls_sw.o

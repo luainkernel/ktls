@@ -52,6 +52,8 @@
 #include "lunatik/lua/lualib.h"
 #include "lunatik/lua/lauxlib.h"
 
+#undef CONFIG_TLS_DEVICE
+
 #define TLS_LUA_ERROR(msg) pr_warn("[lua] %s - %s\n", __func__, msg);
 
 /* Maximum data size carried in a TLS record */
