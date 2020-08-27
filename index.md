@@ -56,7 +56,7 @@ getsockopt(sock, SOL_TLS, TLS_LUA_FILE, ...);
 The kTLS ULP operates in the network system calls, it does the encryption / decryption transparently in the system calls like `recv`, `send` or `sendfile`. So in user space we could send/receive plain text without realizing the TLS layer. The hook will operate at the end of `recvmsg` to use the lunatik in kernel script library and execute the Lua script with the decrypted message received. User then can interact with the hook by `getsockopt` and `setsockopt`.
 
 ## Benchmark
-We do benchmark through the simple https serve we write with a lighttpd server, depending on the file size, our delay time is from 200% to 80% compared to that of lighttpd, because we are not doing optimization(such as caching files and so on) for small file. We also do benchmark for combination of userspace or kernel space Lua script and using kTLS or the traditional one. The result shows that userspace lua and kTLS does a little better than kernel space Lua, for there are buffer copy in the hook to Lunatik and Lunatik itself. This left further optimization in the future.
+We do benchmark between the simple https server we write and the lighttpd server, depending on the file size, our delay time is about 200% to 80% compared to that of lighttpd, because we are not doing optimization(such as caching files and so on) for small file. We also do benchmark for combination of userspace or kernel space Lua script and using kTLS or the traditional one. The results shows that userspace Lua and kTLS performs better than kernel Lua and kTLS. Since the implementation is not yet optimized, we pretend to address this issue in the future.
 
 You can refer to detail benchmark [here](https://github.com/luainkernel/ktls/tree/master/benchmark).
 
